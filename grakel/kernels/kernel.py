@@ -11,7 +11,7 @@ from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 from sklearn.exceptions import NotFittedError
 from sklearn.utils.validation import check_is_fitted
-from sklearn.externals import joblib
+import joblib
 
 from grakel.graph import Graph
 from grakel.kernels._c_functions import k_to_ij_triangular
@@ -147,7 +147,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         """
         self._method_calling = 3
         # Check is fit had been called
-        check_is_fitted(self, ['X'])
+        check_is_fitted(self)
 
         # Input validation and parsing
         if X is None:
