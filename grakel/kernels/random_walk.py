@@ -158,12 +158,8 @@ class RandomWalk(Kernel):
                     x = list(x)
                 if is_iter and len(x) in [0, 1, 2, 3]:
                     if len(x) == 0:
-                        warnings.warn('Ignoring empty element' +
-                                      ' on index: '+str(idx))
-                        continue
-                    else:
-                        A = Graph(x[0], {}, {},
-                                  self._graph_format).get_adjacency_matrix()
+                        warnings.warn(f'Empty element on index: {idx}. Created empty graph.');
+                    A = Graph(x[0], {}, {}, self._graph_format).get_adjacency_matrix()
                 elif type(x) is Graph:
                     A = x.get_adjacency_matrix()
                 else:
