@@ -6,6 +6,7 @@ import os
 import shutil
 import zipfile
 import ssl
+from io import TextIOWrapper
 try:
     # Python 2
     from urllib2 import HTTPError
@@ -26,6 +27,8 @@ from sklearn.utils import Bunch
 from grakel.graph import Graph
 
 global datasets_metadata, symmetric_dataset
+from logging import getLogger
+log = getLogger('grakel')
 
 dataset_metadata = {
     "AIDS": {"nl": True, "el": True, "na": True, "ea": False,
@@ -199,7 +202,7 @@ def read_data(
         prefer_attr_edges=False,
         produce_labels_nodes=False,
         as_graphs=False,
-        is_symmetric=symmetric_dataset):
+        is_symmetric=symmetric_dataset, fopen=open):
     """Create a dataset iterable for GraphKernel.
 
     Parameters
@@ -240,15 +243,14 @@ def read_data(
         of the `Gs` iterable. Useful for classification.
 
     """
-    indicator_path = "./"+str(name)+"/"+str(name)+"_graph_indicator.txt"
-    edges_path = "./" + str(name) + "/" + str(name) + "_A.txt"
-    node_labels_path = "./" + str(name) + "/" + str(name) + "_node_labels.txt"
-    node_attributes_path = "./"+str(name)+"/"+str(name)+"_node_attributes.txt"
-    edge_labels_path = "./" + str(name) + "/" + str(name) + "_edge_labels.txt"
-    edge_attributes_path = \
-        "./" + str(name) + "/" + str(name) + "_edge_attributes.txt"
-    graph_classes_path = \
-        "./" + str(name) + "/" + str(name) + "_graph_labels.txt"
+    get_component_path = lambda cmp: os.path.join(f'{name}', f'{name}_{cmp}.txt')
+    indicator_path = get_component_path("graph_indicator")
+    edges_path = get_component_path('A')
+    node_labels_path = get_component_path('node_labels')
+    node_attributes_path = get_component_path("node_attributes")
+    edge_labels_path = get_component_path("edge_labels")
+    edge_attributes_path = get_component_path("edge_attributes")
+    graph_classes_path = get_component_path("graph_labels")
 
     # node graph correspondence
     ngc = dict()
@@ -262,7 +264,7 @@ def read_data(
     edge_labels = dict()
 
     # Associate graphs nodes with indexes
-    with open(indicator_path, "r") as f:
+    with fopen(indicator_path, "r") as f:
         for (i, line) in enumerate(f, 1):
             ngc[i] = int(line[:-1])
             if int(line[:-1]) not in Graphs:
@@ -273,7 +275,7 @@ def read_data(
                 edge_labels[int(line[:-1])] = dict()
 
     # Extract graph edges
-    with open(edges_path, "r") as f:
+    with fopen(edges_path, "r") as f:
         for (i, line) in enumerate(f, 1):
             edge = line[:-1].replace(' ', '').split(",")
             elc[i] = (int(edge[0]), int(edge[1]))
@@ -282,54 +284,53 @@ def read_data(
                 Graphs[ngc[int(edge[1])]].add((int(edge[1]), int(edge[0])))
 
     # Extract node attributes
-    if (prefer_attr_nodes and
-        dataset_metadata[name].get(
-                "na",
-                os.path.exists(node_attributes_path)
-                )):
-        with open(node_attributes_path, "r") as f:
-            for (i, line) in enumerate(f, 1):
-                node_labels[ngc[i]][i] = \
-                    [float(num) for num in
-                     line[:-1].replace(' ', '').split(",")]
+    has_attrs = False
+    if prefer_attr_nodes and dataset_metadata[name].get("na", False):
+        try:
+            with fopen(node_attributes_path, "r") as f:
+                for (i, line) in enumerate(f, 1):
+                    node_labels[ngc[i]][i] = \
+                        [float(num) for num in
+                         line[:-1].replace(' ', '').split(",")]
+            has_attrs = True
+        except KeyError:
+            pass
     # Extract node labels
-    elif dataset_metadata[name].get(
-            "nl",
-            os.path.exists(node_labels_path)
-            ):
-        with open(node_labels_path, "r") as f:
-            for (i, line) in enumerate(f, 1):
-                node_labels[ngc[i]][i] = int(line[:-1])
-    elif produce_labels_nodes:
+    elif not has_attrs and dataset_metadata[name].get("nl",False):
+        try:
+            with fopen(node_labels_path, "r") as f:
+                for (i, line) in enumerate(f, 1):
+                    node_labels[ngc[i]][i] = int(line[:-1])
+            has_attrs = True
+        except KeyError: pass
+    elif not has_attrs and produce_labels_nodes:
         for i in range(1, len(Graphs)+1):
             node_labels[i] = dict(Counter(s for (s, d) in Graphs[i] if s != d))
 
     # Extract edge attributes
-    if (prefer_attr_edges and
-        dataset_metadata[name].get(
-            "ea",
-            os.path.exists(edge_attributes_path)
-            )):
-        with open(edge_attributes_path, "r") as f:
-            for (i, line) in enumerate(f, 1):
-                attrs = [float(num)
-                         for num in line[:-1].replace(' ', '').split(",")]
-                edge_labels[ngc[elc[i][0]]][elc[i]] = attrs
-                if is_symmetric:
-                    edge_labels[ngc[elc[i][1]]][(elc[i][1], elc[i][0])] = attrs
-
+    has_attrs = False
+    if prefer_attr_edges and dataset_metadata[name].get("ea",False):
+        try:
+            with fopen(edge_attributes_path, "r") as f:
+                for (i, line) in enumerate(f, 1):
+                    attrs = [float(num)
+                             for num in line[:-1].replace(' ', '').split(",")]
+                    edge_labels[ngc[elc[i][0]]][elc[i]] = attrs
+                    if is_symmetric:
+                        edge_labels[ngc[elc[i][1]]][(elc[i][1], elc[i][0])] = attrs
+            has_attrs = True
+        except KeyError: pass
     # Extract edge labels
-    elif dataset_metadata[name].get(
-            "el",
-            os.path.exists(edge_labels_path)
-            ):
-        with open(edge_labels_path, "r") as f:
-            for (i, line) in enumerate(f, 1):
-                edge_labels[ngc[elc[i][0]]][elc[i]] = int(line[:-1])
-                if is_symmetric:
-                    edge_labels[ngc[elc[i][1]]][(elc[i][1], elc[i][0])] = \
-                        int(line[:-1])
-
+    elif not has_attrs and dataset_metadata[name].get("el",False):
+        try:
+            with fopen(edge_labels_path, "r") as f:
+                for (i, line) in enumerate(f, 1):
+                    edge_labels[ngc[elc[i][0]]][elc[i]] = int(line[:-1])
+                    if is_symmetric:
+                        edge_labels[ngc[elc[i][1]]][(elc[i][1], elc[i][0])] = \
+                            int(line[:-1])
+            has_attrs = True
+        except KeyError: pass
     Gs = list()
     if as_graphs:
         for i in range(1, len(Graphs)+1):
@@ -340,7 +341,7 @@ def read_data(
 
     if with_classes:
         classes = []
-        with open(graph_classes_path, "r") as f:
+        with fopen(graph_classes_path, "r") as f:
             for line in f:
                 classes.append(int(line[:-1]))
 
@@ -473,19 +474,23 @@ def fetch_dataset(
 
         with zipfile.ZipFile(str(name) + '.zip', "r") as zip_ref:
             if verbose:
-                print("Extracting dataset ", str(name) + "..")
-            zip_ref.extractall()
-
-        if verbose:
-            print("Parsing dataset ", str(name) + "..")
-
-        data = read_data(name,
-                         with_classes=with_classes,
-                         prefer_attr_nodes=prefer_attr_nodes,
-                         prefer_attr_edges=prefer_attr_edges,
-                         produce_labels_nodes=produce_labels_nodes,
-                         is_symmetric=symmetric_dataset,
-                         as_graphs=as_graphs)
+                print("Parsing dataset ", str(name) + "..")
+            class ZipOpen:
+                def __init__(self, *args, **kwargs):
+                    self.fid = zip_ref.open(*args, **kwargs)
+                def __enter__(self):
+                    self.tio = TextIOWrapper(self.fid)
+                    return self.tio.__enter__()
+                def __exit__(self, exc_type, exc_val, exc_tb):
+                    return self.tio.__exit__(exc_type, exc_val, exc_tb)
+            data = read_data(name,
+                             with_classes=with_classes,
+                             prefer_attr_nodes=prefer_attr_nodes,
+                             prefer_attr_edges=prefer_attr_edges,
+                             produce_labels_nodes=produce_labels_nodes,
+                             is_symmetric=symmetric_dataset,
+                             as_graphs=as_graphs,
+                             fopen=ZipOpen)
         if verbose:
             print("Parse was succesful..")
 
