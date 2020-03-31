@@ -196,7 +196,7 @@ symmetric_dataset = False
 
 
 def read_data(
-        name,
+        name,path='',
         with_classes=True,
         prefer_attr_nodes=False,
         prefer_attr_edges=False,
@@ -243,7 +243,24 @@ def read_data(
         of the `Gs` iterable. Useful for classification.
 
     """
-    get_component_path = lambda cmp: os.path.join(f'{name}', f'{name}_{cmp}.txt')
+    
+    if isinstance(path, zipfile.ZipFile):
+        zip_ref = path
+        class ZipOpen:
+            def __init__(self, *args, **kwargs):
+                self.fid = zip_ref.open(*args, **kwargs)
+            def __enter__(self):
+                self.tio = TextIOWrapper(self.fid)
+                return self.tio.__enter__()
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return self.tio.__exit__(exc_type, exc_val, exc_tb)
+        fopen = ZipOpen
+        folder = ''
+    else:
+        fopen = open
+        folder = path
+    
+    get_component_path = lambda cmp: os.path.join(folder, f'{name}', f'{name}_{cmp}.txt')
     indicator_path = get_component_path("graph_indicator")
     edges_path = get_component_path('A')
     node_labels_path = get_component_path('node_labels')
@@ -351,7 +368,7 @@ def read_data(
         return Bunch(data=Gs)
 
 
-def _download_zip(url, output_name):
+def _download_zip(url, output_name, data_home='',return_handle=False):
     """Download a file from a requested url and store locally.
 
     Parameters
@@ -368,7 +385,7 @@ def _download_zip(url, output_name):
 
     """
     ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    filename = output_name + ".zip"
+    filename = os.path.join(data_home, output_name + ".zip")
     try:
         data_url = urlopen(url, context=ctx)
     except HTTPError as e:
@@ -378,18 +395,27 @@ def _download_zip(url, output_name):
 
     # Store Zip File
     try:
-        with open(filename, 'w+b') as zip_file:
+        if return_handle:
+            zip_file = open(filename, 'w+b')
             copyfileobj(data_url, zip_file)
+            zip_file.seek(0)
+            return zip_file
+        else:
+            with open(filename, 'w+b') as zip_file:
+                copyfileobj(data_url, zip_file)
+            return filename
     except Exception:
         os.remove(filename)
         raise
-    data_url.close()
+    finally:
+        data_url.close()
+    
 
 
 def fetch_dataset(
         name,
         verbose=True,
-        data_home=None,
+        data_home=os.path.join(os.path.expanduser("~"), 'grakel_data'),
         download_if_missing=True,
         with_classes=True,
         produce_labels_nodes=False,
@@ -448,69 +474,41 @@ def fetch_dataset(
     """
     name = str(name)
     if name in dataset_metadata:
-        if data_home is None:
-            data_home = os.path.join(os.path.expanduser("~"), 'grakel_data')
-
-        exists = os.path.isdir(data_home)
-        missing = not os.path.exists(os.path.join(data_home, name + ".zip"))
-        cwd = os.getcwd()
-
-        if missing:
+        file_name = os.path.join(data_home, f'{name}.zip')
+        try:
+            file = open(file_name, "rb")
+        except FileNotFoundError as e:
             if download_if_missing:
-                if not exists:
-                    if verbose:
-                        print("Initializing folder at", str(data_home))
+                if not os.path.isdir(data_home):
+                    log.info(f'Initializing dataset folder at "{data_home}"')
                     os.makedirs(data_home)
-                os.chdir(data_home)
-                if verbose:
-                    print("Downloading dataset for", name + "..")
-                _download_zip(dataset_metadata[name]["link"], name)
+                log.info(f'Downloading dataset {name}')
+                file = _download_zip(dataset_metadata[name]["link"], name, data_home=data_home, return_handle=True)
+                
             else:
-                raise IOError('Dataset ' + name +
-                              ' was not found on ' + str(data_home))
-        else:
-            # move to the general data directory
-            os.chdir(data_home)
+                raise FileNotFoundError(f'Dataset {name} was not found on {data_home}') from e
 
-        with zipfile.ZipFile(str(name) + '.zip', "r") as zip_ref:
-            if verbose:
-                print("Parsing dataset ", str(name) + "..")
-            class ZipOpen:
-                def __init__(self, *args, **kwargs):
-                    self.fid = zip_ref.open(*args, **kwargs)
-                def __enter__(self):
-                    self.tio = TextIOWrapper(self.fid)
-                    return self.tio.__enter__()
-                def __exit__(self, exc_type, exc_val, exc_tb):
-                    return self.tio.__exit__(exc_type, exc_val, exc_tb)
-            data = read_data(name,
-                             with_classes=with_classes,
-                             prefer_attr_nodes=prefer_attr_nodes,
-                             prefer_attr_edges=prefer_attr_edges,
-                             produce_labels_nodes=produce_labels_nodes,
-                             is_symmetric=symmetric_dataset,
-                             as_graphs=as_graphs,
-                             fopen=ZipOpen)
-        if verbose:
-            print("Parse was succesful..")
-
-        if verbose:
-            print("Deleting unzipped dataset files..")
-        shutil.rmtree(str(name))
-
-        if verbose:
-            print("Going back to the original directory..")
-        os.chdir(cwd)
+        with file:
+            zip_ref = zipfile.ZipFile(file, "r")
+            with zip_ref:
+                log.info(f'Parsing dataset {name}')
+                data = read_data(name,path=zip_ref,
+                                 with_classes=with_classes,
+                                 prefer_attr_nodes=prefer_attr_nodes,
+                                 prefer_attr_edges=prefer_attr_edges,
+                                 produce_labels_nodes=produce_labels_nodes,
+                                 is_symmetric=symmetric_dataset,
+                                 as_graphs=as_graphs)
+        log.info(f'Parsed dataset {name}')
 
         return data
     else:
-        raise ValueError('Dataset: "'+str(name)+'" is currently unsupported.' +
-                         '\nSupported datasets come from '
-                         'https://ls11-www.cs.tu-dortmund.de/staff/morris/' +
-                         'graphkerneldatasets. If your dataset name appears' +
-                         ' them send us a pm, to explain you either why we ' +
-                         'don\'t support it, or to update our dataset ' +
-                         'database.')
+        raise ValueError((f'Dataset: "{name}" is currently unsupported.\n' 
+                         'Supported datasets come from '
+                         'https://ls11-www.cs.tu-dortmund.de/staff/morris/graphkerneldatasets.\n'
+                         'If your dataset name appears then send us a pm, to explain you either why we '
+                         'don\'t support it, or to update our dataset '
+                         'database.'))
 
 
 def get_dataset_info(dataset_name, default=None):
