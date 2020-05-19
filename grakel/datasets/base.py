@@ -73,7 +73,7 @@ dataset_metadata = {
     "Cuneiform": {"nl": True, "el": True, "na": True, "ea": True,
                   "link": "https://ls11-www.cs.uni-dortmund.de/people/morris/"
                           "graphkerneldatasets/Cuneiform.zip"},
-    "FINGERPRINT": {"nl": False, "el": False, "na": True, "ea": True,
+    "Fingerprint": {"nl": False, "el": False, "na": True, "ea": True,
                     "link": "https://ls11-www.cs.uni-dortmund.de/people/" +
                     "morris/graphkerneldatasets/Fingerprint.zip"},
     "FIRSTMM_DB": {"nl": True, "el": False, "na": True, "ea": True,
@@ -249,6 +249,8 @@ def read_data(
         class ZipOpen:
             def __init__(self, *args, **kwargs):
                 self.fid = zip_ref.open(*args, **kwargs)
+            def __iter__(self):
+                return iter(TextIOWrapper(self.fid))
             def __enter__(self):
                 self.tio = TextIOWrapper(self.fid)
                 return self.tio.__enter__()
@@ -415,7 +417,7 @@ def _download_zip(url, output_name, data_home='',return_handle=False):
 def fetch_dataset(
         name,
         verbose=True,
-        data_home=os.path.join(os.path.expanduser("~"), 'grakel_data'),
+        data_home='grakel_data',
         download_if_missing=True,
         with_classes=True,
         produce_labels_nodes=False,
