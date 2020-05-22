@@ -309,7 +309,8 @@ class Graph(object):
                 self.change_format("all")
         elif graph_format == "adjacency":
             if self._format not in ["all", "adjacency"]:
-                warnings.warn('changing format from "adjacency" to "all"')
+                if warn:
+                    warnings.warn('changing format from "adjacency" to "all"')
                 self.change_format("all")
 
     def construct_labels(self, label_type="vertex", purpose="adjacency"):
@@ -1047,7 +1048,7 @@ class Graph(object):
                 self.node_labels = None
                 self.edge_labels = None
 
-    def laplacian(self, save=True):
+    def laplacian(self, save=True, warn=False):
         """Calculate the laplacian of the given graph.
 
         Parameters
@@ -1064,14 +1065,14 @@ class Graph(object):
         if self.laplacian_graph is not None:
             laplacian_graph = self.laplacian_graph
         else:
-            self.desired_format("adjacency", warn=True)
+            self.desired_format("adjacency", warn=warn)
             laplacian_graph = laplacian(self.adjacency_matrix)
 
             if save:
                 self.laplacian_graph = laplacian_graph
         return laplacian_graph
 
-    def get_vertices(self, purpose="adjacency"):
+    def get_vertices(self, purpose="adjacency",warn=False):
         """Create an iterable of vertices.
 
         Parameters
@@ -1098,13 +1099,13 @@ class Graph(object):
                 purpose = "dictionary"
 
         if purpose == "adjacency":
-            self.desired_format("adjacency", warn=True)
+            self.desired_format("adjacency", warn=warn)
             return range(0, self.n)
         if purpose == "dictionary":
-            self.desired_format("dictionary", warn=True)
+            self.desired_format("dictionary", warn=warn)
             return self.vertices
 
-    def get_edges(self, purpose="adjacency", with_weights=False):
+    def get_edges(self, purpose="adjacency", with_weights=False, warn=False):
         """Create an iterable of edges as tuples.
 
         Parameters
@@ -1123,7 +1124,7 @@ class Graph(object):
             raise ValueError('purpose is either "adjacency" of "dictionary"')
 
         if purpose == "adjacency":
-            self.desired_format("adjacency", warn=True)
+            self.desired_format("adjacency", warn=warn)
             idx_i, idx_j = np.where(self.adjacency_matrix > 0)
             edges = zip(idx_i, idx_j)
             if with_weights:
@@ -1131,7 +1132,7 @@ class Graph(object):
             else:
                 return list(edges)
         if purpose == "dictionary":
-            self.desired_format("dictionary", warn=True)
+            self.desired_format("dictionary", warn=warn)
             if with_weights:
                 return [(i, j) for i in self.edge_dictionary.keys()
                         for j in self.edge_dictionary[i].keys()]
