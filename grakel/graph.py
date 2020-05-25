@@ -355,7 +355,7 @@ class Graph(object):
             self,
             target_format="dictionary",
             purpose="all",
-            init=False):
+            init=False, warn=False):
         """Convert labels to a desired format.
 
         Parameters
@@ -378,14 +378,10 @@ class Graph(object):
         """
         if (target_format == "adjacency"):
             if (self._format != "adjacency" or init):
-                if bool(self.index_node_labels) and \
-                   purpose in ['all', 'vertex']:
-                    warnings.warn('overriding existing' +
-                                  'node labels for indexes')
-                if bool(self.index_edge_labels) and \
-                   purpose in ['all', 'edges']:
-                    warnings.warn('overriding existing edge' +
-                                  'labels for indexes')
+                if bool(self.index_node_labels) and purpose in ['all', 'vertex'] and warn:
+                    warnings.warn('overriding existing node labels for indexes')
+                if bool(self.index_edge_labels) and purpose in ['all', 'edges'] and warn:
+                    warnings.warn('overriding existing edge labels for indexes')
                 cond_labels_nodes = \
                     purpose in ['all', 'vertex'] and bool(self.node_labels)
                 cond_labels_edges = \
@@ -402,10 +398,10 @@ class Graph(object):
                             {(vi[k], vi[q]): self.edge_labels[(k, q)]
                              for (k, q) in self.edge_labels.keys()}
                 else:
-                    if not init:
+                    if not init and warn:
                         warnings.warn('no labels to convert from, ' +
                                       'for the given purpose')
-            else:
+            elif warn:
                 warnings.warn('labels already defined for that format ' +
                               '- nothing to convert')
         elif (target_format == "dictionary"):
