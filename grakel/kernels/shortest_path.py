@@ -282,9 +282,6 @@ class ShortestPath(Kernel):
 
         """
         self._method_calling = 3
-        # Check is fit had been called
-        check_is_fitted(self, ['X', '_nx', '_enum'])
-
         # Input validation and parsing
         if X is None:
             raise ValueError('transform input cannot be None')
@@ -293,7 +290,7 @@ class ShortestPath(Kernel):
 
         # Transform - calculate kernel matrix
         try:
-            check_is_fitted(self, ['phi_X'])
+            check_is_fitted(self)
             phi_x = self._phi_X
         except NotFittedError:
             phi_x = np.zeros(shape=(self._nx, len(self._enum)))

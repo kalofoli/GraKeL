@@ -256,7 +256,7 @@ class CoreFramework(Kernel):
         """
         self._method_calling = 3
         # Check is fit had been called
-        check_is_fitted(self, ['X'])
+        check_is_fitted(self)
 
         # Input validation and parsing
         if X is None:
