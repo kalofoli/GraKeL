@@ -24,6 +24,8 @@ try:
 except ImportError:
     pass
 
+import logging
+log = logging.getLogger()
 
 class Kernel(BaseEstimator, TransformerMixin):
     """A general class for graph kernels.
@@ -202,6 +204,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         else:
             return km
 
+    progress_period = 60
     def _calculate_kernel_matrix(self, Y=None):
         """Calculate the kernel matrix given a target_graph and a kernel.
 
@@ -223,14 +226,21 @@ class Kernel(BaseEstimator, TransformerMixin):
             and self.X to inputs.
 
         """
+        import time
+        t1 = time.time()
+        n = len(self.X)
         if Y is None:
-            K = np.zeros(shape=(len(self.X), len(self.X)))
+            K = np.zeros(shape=(n,n))
             if self._parallel is None:
                 cache = list()
                 for (i, x) in enumerate(self.X):
                     K[i, i] = self.pairwise_operation(x, x)
                     for (j, y) in enumerate(cache):
                         K[j, i] = self.pairwise_operation(y, x)
+                        t2 =time.time()
+                        if t2 - t1> self.progress_period:
+                            log.info(f'Kernel computation at {i*(i-1)/(n*(n-1))*100:.3g}%.')
+                            t1=t2
                     cache.append(x)
             else:
                 dim = len(self.X)
