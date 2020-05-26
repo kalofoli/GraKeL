@@ -395,7 +395,7 @@ class Kernel(BaseEstimator, TransformerMixin):
                 if delim:
                     if sub_key in self._initialized:
                         self._initialized[sub_key] = False
-                elif key in self._initialized:
+                if key in self._initialized:
                     self._initialized[key] = False
 
         # Set parameters
