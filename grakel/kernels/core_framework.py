@@ -176,21 +176,21 @@ class CoreFramework(Kernel):
         # Add the zero iteration element
         if self._method_calling == 2:
             K = np.zeros(shape=(nx, nx))
-        elif self._method_calling == 3:
+        elif self._method_calling == 'transform':
             self._dummy_kernel = dict()
             K = np.zeros(shape=(nx, self._nx))
 
         # Main
-        base_graph_kernel, indexes_list = dict(), dict()
+        base_graph_kernel, index_list = dict(), dict()
         for i in range(max_core_number, self.min_core, -1):
-            subgraphs, indexes = list(), list()
+            subgraphs, indices = list(), list()
             for (idx, (cn, (g, extra))) in enumerate(zip(core_numbers, graphs)):
                 vertices = [k for k, v in iteritems(cn) if v >= i]
                 if len(vertices) > 0:
                     # Calculate subgraph and store the index of the non-empty vertices
                     sg = g.get_subgraph(vertices)
                     sub_extra = list()
-                    indexes.append(idx)
+                    indices.append(idx)
                     if len(extra) > 0:
                         vs = np.array(sg.get_vertices(purpose='any'))
                         for e in extra:
@@ -202,44 +202,44 @@ class CoreFramework(Kernel):
                         subgraphs.append((sg, ) + tuple(sub_extra))
                     else:
                         subgraphs.append(sg)
-            indexes = np.array(indexes)
-            indexes_list[i] = indexes
+            indices = np.array(indices)
+            index_list[i] = indices
 
             # calculate kernel
-            if self._method_calling == 1 and indexes.shape[0] > 0:
+            if self._method_calling == 1 and indices.shape[0] > 0:
                 base_graph_kernel[i] = self.get_base_graph_kernel_instance(**self.params_)
                 base_graph_kernel[i].fit(subgraphs)
-            elif self._method_calling == 2 and indexes.shape[0] > 0:
+            elif self._method_calling == 2 and indices.shape[0] > 0:
                 base_graph_kernel[i] = self.get_base_graph_kernel_instance(**self.params_)
                 ft_subgraph_mat = base_graph_kernel[i].fit_transform(subgraphs)
-                for j in range(indexes.shape[0]):
-                    K[indexes[j], indexes] += ft_subgraph_mat[j, :]
-            elif self._method_calling == 3:
+                for j in range(indices.shape[0]):
+                    K[indices[j], indices] += ft_subgraph_mat[j, :]
+            elif self._method_calling == 'transform':
                 if self._max_core_number < i or self._fit_indexes[i].shape[0] == 0:
-                    if len(indexes) > 0:
+                    if len(indices) > 0:
                         # add a dummy kernel for calculating the diagonal
                         self._dummy_kernel[i] = self.get_base_graph_kernel_instance(**self.params_)
                         self._dummy_kernel[i].fit(subgraphs)
                 else:
-                    if indexes.shape[0] > 0:
+                    if indices.shape[0] > 0:
                         subgraph_tmat = self.X[i].transform(subgraphs)
-                        for j in range(indexes.shape[0]):
-                            K[indexes[j], self._fit_indexes[i]] += subgraph_tmat[j, :]
+                        for j in range(indices.shape[0]):
+                            K[indices[j], self._fit_indexes[i]] += subgraph_tmat[j, :]
 
         if self._method_calling == 1:
             self._nx = nx
             self._max_core_number = max_core_number
-            self._fit_indexes = indexes_list
+            self._fit_indexes = index_list
             return base_graph_kernel
         elif self._method_calling == 2:
             self._nx = nx
             self._max_core_number = max_core_number
-            self._fit_indexes = indexes_list
+            self._fit_indexes = index_list
             return K, base_graph_kernel
-        elif self._method_calling == 3:
+        elif self._method_calling == 'transform':
             self._t_nx = nx
             self._max_core_number_trans = max_core_number
-            self._transform_indexes = indexes_list
+            self._transform_indexes = index_list
             return K
 
     def transform(self, X):
@@ -262,7 +262,7 @@ class CoreFramework(Kernel):
             all pairs of graphs between target an features
 
         """
-        self._method_calling = 3
+        self._method_calling = 'transform'
         # Check is fit had been called
         check_is_fitted(self)
 

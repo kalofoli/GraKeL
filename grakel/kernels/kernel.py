@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 import logging
-log = logging.getLogger()
+log = logging.getLogger(__name__.split('.')[-1])
 
 class Kernel(BaseEstimator, TransformerMixin):
     """A general class for graph kernels.
@@ -204,7 +204,7 @@ class Kernel(BaseEstimator, TransformerMixin):
         else:
             return km
 
-    progress_period = 60
+    progress_period = 30
     def _calculate_kernel_matrix(self, Y=None):
         """Calculate the kernel matrix given a target_graph and a kernel.
 
