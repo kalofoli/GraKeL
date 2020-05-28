@@ -59,49 +59,51 @@ class CoreFramework(Kernel):
             self._initialized["n_jobs"] = True
 
         if not self._initialized["base_graph_kernel"]:
-            base_graph_kernel = self.base_graph_kernel
-            if base_graph_kernel is None:
-                get_base_graph_kernel_instance, params = ShortestPath, dict()
-            elif type(base_graph_kernel) is type and issubclass(base_graph_kernel, Kernel):
-                get_base_graph_kernel_instance = base_graph_kernel
-                params = dict()
-            elif isinstance(base_graph_kernel, Kernel):
-                params = base_graph_kernel.get_params()
-                base_graph_kernel_inst = base_graph_kernel
-                def set_params_and_return(**params):
-                    base_graph_kernel_inst.set_params(**params)
-                    return base_graph_kernel_inst 
-                get_base_graph_kernel_instance = set_params_and_return 
-            else:
-                try:
-                    get_base_graph_kernel_instance, params = base_graph_kernel
-                except Exception:
-                    raise TypeError('Base kernel was not formulated in '
-                                    'the correct way. '
-                                    'Check documentation.')
-
-                #if not (type(base_graph_kernel) is type and
-                #        issubclass(base_graph_kernel, Kernel)):
-                #    raise TypeError('The first argument must be a valid '
-                #                    'grakel.kernel.kernel Object')
-                if type(params) is not dict:
-                    raise ValueError('If the second argument of base '
-                                     'kernel exists, it must be a diction'
-                                     'ary between parameters names and '
-                                     'values')
-                params.pop("normalize", None)
-
-            params["normalize"] = False
-            params["verbose"] = self.verbose
-            params["n_jobs"] = None
-            self.get_base_graph_kernel_instance = get_base_graph_kernel_instance
-            self.params_ = params
+            self.params_ = {}
+            factory = self.initialise_base_graph_kernel_factory(self.base_graph_kernel, self.params_)
+            self._base_graph_kernel_factory = factory
             self._initialized["base_graph_kernel"] = True
 
         if not self._initialized["min_core"]:
             if type(self.min_core) is not int or self.min_core < -1:
                 raise TypeError("'min_core' must be an integer bigger than -1")
             self._initialized["min_core"] = True
+
+    def initialise_base_graph_kernel_factory(self, base_graph_kernel, params):
+        
+        if base_graph_kernel is None:
+            factory, params = ShortestPath, dict()
+        elif type(base_graph_kernel) is type and issubclass(base_graph_kernel, Kernel):
+            factory = base_graph_kernel
+            params = dict()
+        else:
+            try:
+                factory, params = base_graph_kernel
+            except Exception:
+                raise TypeError('Base kernel was not formulated in '
+                                'the correct way. '
+                                'Check documentation.')
+
+            #if not (type(base_graph_kernel) is type and
+            #        issubclass(base_graph_kernel, Kernel)):
+            #    raise TypeError('The first argument must be a valid '
+            #                    'grakel.kernel.kernel Object')
+            if type(params) is not dict:
+                raise ValueError('If the second argument of base '
+                                 'kernel exists, it must be a diction'
+                                 'ary between parameters names and '
+                                 'values')
+            params.pop("normalize", None)
+
+        params["normalize"] = False
+        params["verbose"] = self.verbose
+        params["n_jobs"] = None
+        return factory
+
+    def make_base_graph_kernel_instance(self, **params):
+        inst = self._base_graph_kernel_factory(**params)
+        return inst
+        
 
     def parse_input(self, X):
         """Parse input and create features, while initializing and/or calculating sub-kernels.
@@ -207,10 +209,10 @@ class CoreFramework(Kernel):
 
             # calculate kernel
             if self._method_calling == 1 and indices.shape[0] > 0:
-                base_graph_kernel[i] = self.get_base_graph_kernel_instance(**self.params_)
+                base_graph_kernel[i] = self.make_base_graph_kernel_instance(**self.params_)
                 base_graph_kernel[i].fit(subgraphs)
             elif self._method_calling == 2 and indices.shape[0] > 0:
-                base_graph_kernel[i] = self.get_base_graph_kernel_instance(**self.params_)
+                base_graph_kernel[i] = self.make_base_graph_kernel_instance(**self.params_)
                 ft_subgraph_mat = base_graph_kernel[i].fit_transform(subgraphs)
                 for j in range(indices.shape[0]):
                     K[indices[j], indices] += ft_subgraph_mat[j, :]
@@ -218,7 +220,7 @@ class CoreFramework(Kernel):
                 if self._max_core_number < i or self._fit_indexes[i].shape[0] == 0:
                     if len(indices) > 0:
                         # add a dummy kernel for calculating the diagonal
-                        self._dummy_kernel[i] = self.get_base_graph_kernel_instance(**self.params_)
+                        self._dummy_kernel[i] = self.make_base_graph_kernel_instance(**self.params_)
                         self._dummy_kernel[i].fit(subgraphs)
                 else:
                     if indices.shape[0] > 0:
@@ -281,6 +283,7 @@ class CoreFramework(Kernel):
             np.seterr(**old_settings)
 
         return km
+
 
     def fit_transform(self, X, y=None):
         """Fit and transform, on the same dataset.
